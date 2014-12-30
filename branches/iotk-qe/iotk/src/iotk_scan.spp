@@ -36,7 +36,7 @@
 > REVISION="${REVISION//${dol}/}"
 
 >PROCEDURE=iotk_scan_begin
-recursive subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
+recursive subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,direction,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_attr_interf
@@ -55,6 +55,7 @@ recursive subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
 #endif
   type(iotk_dummytype), optional              :: dummy
   logical,              optional, intent(out) :: found
+  integer,              optional, intent(out) :: direction
   integer,              optional, intent(out) :: ierr
   character(iotk_namlenx) :: namel
   character(iotk_attlenx) :: attrl
@@ -66,6 +67,7 @@ recursive subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
   logical :: link_found,foundl
   type(iotk_unit), pointer :: this_unit
   integer :: lunit
+  integer :: directionl
   character(iotk_fillenx) :: oldfile
   ierrl = 0
   if(present(attr)) attr(1:1)=iotk_eos
@@ -89,12 +91,14 @@ recursive subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
     $(ERROR ierrl)
     goto 1
   end if
+  directionl = 1
   call iotk_scan(lunit, 1,1,namel,attrl,binary,stream,foundl,ierrl)
   if(ierrl/=0) then
     $(ERROR ierrl)
     goto 1
   end if
   if(.not.foundl)  then
+    directionl = -1
     call iotk_scan(lunit,-1,1,namel,attrl,binary,stream,foundl,ierrl)
     if(ierrl/=0) then
       $(ERROR ierrl '' namel)
@@ -149,8 +153,12 @@ recursive subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
     goto 1
   end if
 1 continue
-  if(ierrl/=0) foundl=.false.
+  if(ierrl/=0) then
+     foundl=.false.
+     directionl=0
+  end if
   if(present(found)) found = foundl
+  if (present(direction)) direction = directionl
   if(ierrl==0 .and. .not. present(found) .and. .not. foundl) then
     $(ERROR ierrl 'Tag not found' namel)
     ierrl = - ierrl
@@ -663,6 +671,9 @@ subroutine iotk_scan_tag_x(unit,direction,control,tag,binary,stream,ierr)
     else if(tag(pos:pos+2)=="!--" .and. tag(pos1-1:pos1)=="--") then
       control = 4
       tag = tag(pos+3:pos1-2)//iotk_eos
+    else if(tag(pos:pos+7)=="!DOCTYPE") then
+      control = 6
+      tag = tag(pos+8:pos1)//iotk_eos
     else
       control = 1
       tag = tag(pos:pos1)//iotk_eos
@@ -678,6 +689,7 @@ subroutine iotk_scan_x(unit,direction,control,name,attr,binary,stream,found,ierr
   use iotk_scan_interf
   use iotk_misc_interf
   use iotk_str_interf
+  use iotk_stream_interf
   implicit none
   integer,                 intent(in)  :: unit
   integer,                 intent(in)  :: direction
@@ -692,6 +704,7 @@ subroutine iotk_scan_x(unit,direction,control,name,attr,binary,stream,found,ierr
   character(iotk_taglenx) :: tag
   character(iotk_namlenx) :: r_name
   integer :: level,r_control
+  integer :: iostat
   logical :: lall,match
 
   found=.false.
@@ -739,10 +752,20 @@ subroutine iotk_scan_x(unit,direction,control,name,attr,binary,stream,found,ierr
       case(2)
         if(level==0 .and. match) exit
         if(level==0) then
+! ... line to solve a bug : before are needed two lines at the end of the files
+! ... to get right scanning
+          if (.not.binary) THEN
+             backspace(unit,iostat=iostat)
+             if(iostat/=0) then
+                $(ERROR iostat ' ' iostat)
+                return
+             end if
+	  else
           call iotk_scan_tag(unit,-1,r_control,tag,binary,stream,ierr)
           if(ierr/=0) then
             $(ERROR ierr)
             return
+          end if
           end if
           return
         end if

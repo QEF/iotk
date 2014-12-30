@@ -52,6 +52,7 @@ module iotk_module
   public :: iotk_scan_pi
   public :: iotk_scan_empty
   public :: iotk_scan_dat
+  public :: iotk_scan_dat_inside
   public :: iotk_scan_attr
   public :: iotk_taglenx
   public :: iotk_attlenx

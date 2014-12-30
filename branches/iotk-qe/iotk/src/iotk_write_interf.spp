@@ -40,7 +40,7 @@ public :: iotk_write_empty
 public :: iotk_write_tag
 
 interface iotk_write_begin
-subroutine iotk_write_begin_x(unit,name,attr,dummy,ierr)
+subroutine iotk_write_begin_x(unit,name,attr,dummy,new_line,ierr)
   use iotk_base
   implicit none
   integer,                    intent(in)  :: unit
@@ -48,16 +48,18 @@ subroutine iotk_write_begin_x(unit,name,attr,dummy,ierr)
   character(len=*), optional, intent(in)  :: attr
   type(iotk_dummytype), optional          :: dummy
   integer,      optional, intent(out) :: ierr
+  logical, optional, intent(in)           :: new_line
 end subroutine iotk_write_begin_x
 end interface
 
 interface iotk_write_end
-subroutine iotk_write_end_x(unit,name,dummy,ierr)
+subroutine iotk_write_end_x(unit,name,dummy,indentation,ierr)
   use iotk_base
   implicit none
   integer,                    intent(in)  :: unit
   character(len=*),           intent(in)  :: name
   type(iotk_dummytype), optional          :: dummy
+  logical, optional,          intent(in)  :: indentation
   integer,          optional, intent(out) :: ierr
 end subroutine iotk_write_end_x
 end interface
@@ -98,7 +100,7 @@ end subroutine iotk_write_empty_x
 end interface
 
 interface iotk_write_tag
-subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr)
+subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr,new_line)
   use iotk_base
   implicit none
   integer,                   intent(in)  :: unit
@@ -107,6 +109,7 @@ subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr)
   logical,                   intent(in)  :: binary
   integer,                   intent(in)  :: indent
   integer,                   intent(out) :: ierr
+  logical,optional,          intent(in)  :: new_line
 end subroutine iotk_write_tag_x
 end interface
 

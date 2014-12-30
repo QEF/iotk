@@ -150,6 +150,7 @@ subroutine iotk_unit_add_x(unit,this,ierr)
   this%root         = ""
   this%skip_root    = .false.
   this%raw          = .false.
+  this%qe_syntax   = .false.
   this%level        = 0
   this%close_at_end = .false.
   nullify(this%son)
@@ -277,3 +278,56 @@ subroutine iotk_unit_get_x(unit,pointer)
   call iotk_unit_list_search(iotk_units,unit=unit,ptr=pointer)
 end subroutine iotk_unit_get_x
 
+
+! ... procedure that move the reading cursor at the beginning of the root node
+>PROCEDURE="iotk_rewind"
+subroutine iotk_rewind_x(unit,ierr) 
+  use iotk_base
+  use iotk_error_interf
+  use iotk_scan_interf
+  use iotk_unit_interf
+  use iotk_misc_interf
+  implicit none
+  integer,                intent(in)  :: unit
+  integer, optional,                intent(out) :: ierr
+  integer                             :: control
+  logical                             :: stream, binary
+  character(iotk_taglenx) :: tag
+
+  integer                 :: ierrl
+  type(iotk_unit), pointer :: this
+
+  ierrl = 0
+
+  call iotk_unit_get(unit,pointer=this)
+  call iotk_inquire(unit,binary,stream,ierrl)
+  if(ierrl/=0) then
+    $(ERROR ierrl)
+    goto 1
+  end if
+
+  if(.not.associated(this)) then
+    $(ERROR ierrl)
+    goto 1
+  end if
+
+  rewind this%unit
+
+  do
+    call iotk_scan_tag(unit,+1,control,tag, binary,stream,ierrl)
+    if(ierrl/=0) then
+      $(ERROR ierrl)
+      goto 1
+    end if
+    IF (control==1) EXIT
+  end do
+  this%level = 0
+
+1 continue
+  if(present(ierr)) then
+    ierr = ierrl
+  else
+    if(ierrl/=0) call iotk_error_handler(ierrl)
+  end if
+
+end subroutine iotk_rewind_x
