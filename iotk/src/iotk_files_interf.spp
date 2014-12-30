@@ -70,7 +70,7 @@ end subroutine iotk_link_x
 end interface
 
 interface iotk_open_write
-subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,skip_head,ierr)
+subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,qe_syntax,skip_root,skip_head,ierr)
   use iotk_base
   implicit none
   integer,                    intent(in)  :: unit
@@ -81,6 +81,7 @@ subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,
   logical,          optional, intent(in)  :: new
   logical,          optional, intent(in)  :: raw
   character(len=*), optional, intent(in)  :: root
+  logical,      optional, intent(in)  :: qe_syntax
   logical,          optional, intent(in)  :: skip_root
   logical,          optional, intent(in)  :: skip_head
   integer,          optional, intent(out) :: ierr
@@ -98,7 +99,7 @@ end subroutine iotk_close_write_x
 end interface
 
 interface iotk_open_read
-subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
+subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,qe_syntax,root,ierr)
   use iotk_base
   implicit none
   integer,                    intent(in)  :: unit
@@ -107,6 +108,7 @@ subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
   logical,          optional, intent(in)  :: binary 
   logical,          optional, intent(in)  :: stream
   logical,          optional, intent(in)  :: raw
+  logical,      optional, intent(in)      :: qe_syntax
 #ifdef __IOTK_WORKAROUND6
   character(len=*), optional              :: attr
   character(len=*), optional              :: root

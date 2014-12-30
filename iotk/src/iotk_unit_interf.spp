@@ -41,6 +41,7 @@ public :: iotk_inquire
 public :: iotk_unit_del
 public :: iotk_unit_parent
 public :: iotk_unit_get
+public :: iotk_rewind
 
 ! This module contains the interfaces to all iotk routines
 
@@ -110,6 +111,15 @@ subroutine iotk_unit_get_x(unit,pointer)
   integer,     intent(in)  :: unit
   type(iotk_unit), pointer :: pointer
 end subroutine iotk_unit_get_x
+end interface
+
+interface iotk_rewind
+subroutine iotk_rewind_x(unit ,ierr)
+  use iotk_base
+  implicit none
+  integer,                intent(in)  :: unit
+  integer, optional,               intent(out) :: ierr
+end subroutine iotk_rewind_x
 end interface
 
 end module iotk_unit_interf

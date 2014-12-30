@@ -102,11 +102,15 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
   integer :: ierrl,lunit,iostat
   logical :: binary,raw,stream
   integer :: lcolumns
+  integer :: dat_rank,i
+  integer, dimension(:), allocatable :: dat_shape
+  logical :: qe_syntax
   integer(iotk_header_kind), parameter :: idummy=0
   character(100) :: lsep
   character(300) :: usefmt
   character(iotk_attlenx) :: lattr
   character(iotk_attlenx) :: attr_tmp
+  character(len=10) :: tmpstr
   type (iotk_unit), pointer :: this
 > if [ "$type" = CHARACTER ] ; then
   ${type} (kind=this_kind,len=len(dat)),allocatable :: dattmp(:)
@@ -128,7 +132,11 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
     end if
   end if
   lunit = iotk_phys_unit(unit)
-  call iotk_unit_get(lunit,pointer=this)
+  call iotk_unit_get(lunit,pointer=this)  
+  qe_syntax = .false.
+  if (associated(this)) then
+     qe_syntax = this%qe_syntax
+  end if
   raw = .false.
   if(associated(this)) then
     raw = this%raw
@@ -152,6 +160,7 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
     $(ERROR ierrl 'Special characters (<>&) found in fmt string' unit name='trim(name)' fmt='trim(fmt)')
     goto 1
   end if
+  if (.not.qe_syntax) then
   call iotk_write_attr(lattr,"type",iotk_tolower("${type}"),first=.true.,ierr=ierrl)
   if(ierrl/=0) then
     $(ERROR ierrl)
@@ -162,13 +171,41 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
     $(ERROR ierrl)
     goto 1
   end if
+  end if
 > if [ "$type" = CHARACTER ] ; then
+  if (.not.qe_syntax) then
   call iotk_write_attr(lattr,"len",len(dat),ierr=ierrl)
   if(ierrl/=0) then
     $(ERROR ierrl)
     goto 1
   end if
+  else
+     lattr(1:1) = iotk_eos
+  end if
 > else
+  if (qe_syntax) then
+    lattr(1:1) = iotk_eos
+    dat_rank = size(shape(dat))
+    if (dat_rank>0) then
+       allocate(dat_shape(dat_rank))
+       dat_shape = shape(dat)
+       call iotk_write_attr(lattr,"rank",dat_rank,ierr=ierrl,first=.true.)
+       if(ierrl/=0) then
+          $(ERROR ierrl)
+          goto 1
+       end if
+       do i=1,dat_rank
+     	  write(tmpstr,'(i10)') i
+	  tmpstr = adjustl(tmpstr)
+          call iotk_write_attr(lattr,"n"//tmpstr(1:len_trim(tmpstr)),dat_shape(i),ierr=ierrl)
+          if(ierrl/=0) then
+             $(ERROR ierrl)
+             goto 1
+          end if
+       end do
+       deallocate(dat_shape)
+    end if
+  end if
   if(binary) then
     call iotk_write_attr(lattr,"kind",kind(dat),ierr=ierrl)
     if(ierrl/=0) then
@@ -177,11 +214,12 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
     end if
   end if
 > fi
-  if(.not.iotk_strcomp(usefmt,"!")) call iotk_write_attr(lattr,"fmt",iotk_strtrim(usefmt),ierr=ierrl)
+  if(.not.iotk_strcomp(usefmt,"!") .and. .not.qe_syntax) call iotk_write_attr(lattr,"fmt",iotk_strtrim(usefmt),ierr=ierrl)
   if(ierrl/=0) then
     $(ERROR ierrl)
     goto 1
   end if
+  if (.not.qe_syntax) then
   if(lcolumns/=1) call iotk_write_attr(lattr,"columns",lcolumns,ierr=ierrl)
   if(ierrl/=0) then
     $(ERROR ierrl)
@@ -235,7 +273,26 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
     $(ERROR ierrl)
     goto 1
   end if
-
+  else
+    if(present(attr)) then
+      call iotk_write_begin(unit,name,attr,ierr=ierrl)
+    else
+      call iotk_write_begin(unit,name,ierr=ierrl)
+    end if
+    if(ierrl/=0) then
+      $(ERROR ierrl)
+      goto 1
+    end if
+> if [ $type == CHARACTER ] ; then
+    call iotk_write_begin(unit,"string",lattr,ierr=ierrl,new_line=.false.)
+> else
+>   if [ $rank -eq 0 ] ; then
+    call iotk_write_begin(unit,iotk_tolower("${type}"),lattr,ierr=ierrl,new_line=.false.)
+>   else
+    call iotk_write_begin(unit,iotk_tolower("${type}"),lattr,ierr=ierrl,new_line=.true.)
+>   fi
+> fi
+  end if
   allocate(dattmp($(SIZE dat)))
 > if [ $rank -eq 0 ] ; then
      dattmp(1) = dat
@@ -250,7 +307,6 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
      dattmp = pack(dat,mask=.true.)
 #endif
 > fi
-
   if(binary) then
     if(raw) then
       write(lunit,iostat=iostat) (dattmp(itmp),itmp=1,size(dattmp))
@@ -284,6 +340,7 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
       end if
     else if(iotk_strcomp(usefmt,"!")) then
 > if [ $type = CHARACTER ] ;then
+    if ((.not. qe_syntax) .or. (size(dattmp)>1)) then
      do itmp = 1 , size(dattmp)
        call iotk_deescape(linetmp,dattmp(itmp))
        write(lunit,"(a)",iostat=iostat) linetmp(1:iotk_strlen(linetmp))
@@ -292,19 +349,58 @@ subroutine iotk_write_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,column
         goto 1
         end if
      end do
+    else
+      call iotk_deescape(linetmp,dattmp(1))
+      write(lunit,"(a)",iostat=iostat,advance='no') linetmp(1:iotk_strlen(linetmp))
+      if(iostat/=0) then
+        $(ERROR ierrl)
+        goto 1
+      end if
+    end if
 > else
+    if ((.not. qe_syntax) .or. (size(dattmp)>1)) then
      write(lunit,fmt=trim(iotk_wfmt("${type}",kind(dattmp),lcolumns,-1,lsep)),iostat=iostat) (dattmp(itmp),itmp=1,size(dattmp))
      if(iostat/=0) then
       $(ERROR ierrl)
       goto 1
      end if
+    else
+     write(lunit,fmt=trim(iotk_wfmt("${type}",kind(dattmp),lcolumns,-1,lsep)),advance='no',iostat=iostat) dattmp(1)
+     if(iostat/=0) then
+      $(ERROR ierrl)
+      goto 1
+     end if
+    end if
 > fi
     else
+    if ((.not. qe_syntax) .or. (size(dattmp)>1)) then
       write(lunit,fmt=usefmt(1:iotk_strlen(usefmt)),iostat=iostat) (dattmp(itmp),itmp=1,size(dattmp))
       if(iostat/=0) then
         $(ERROR ierrl)
         goto 1
       end if
+    else
+      write(lunit,fmt=usefmt(1:iotk_strlen(usefmt)),advance='no',iostat=iostat) dattmp(1)
+      if(iostat/=0) then
+        $(ERROR ierrl)
+        goto 1
+      end if
+    end if
+    end if
+  end if
+  if (qe_syntax) then
+> if [ $type == CHARACTER ] ; then
+    call iotk_write_end(unit,"string",indentation=.false.,ierr=ierrl)
+> else
+>   if [ $rank -eq 0 ] ; then
+    call iotk_write_end(unit,iotk_tolower("${type}"),indentation=.false.,ierr=ierrl)
+>   else
+    call iotk_write_end(unit,iotk_tolower("${type}"),indentation=.true.,ierr=ierrl)
+>   fi
+> fi
+    if(ierrl/=0) then
+      $(ERROR ierrl)
+      goto 1
     end if
   end if
   call iotk_write_end(unit,name,ierr=ierrl)
@@ -670,6 +766,8 @@ end subroutine iotk_scan_dat_aux_${type}${kind}
 >PROCEDURE=iotk_scan_dat
 subroutine iotk_scan_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,found,default,ierr)
   use iotk_base
+  use iotk_unit_interf
+  use iotk_attr_interf, only : iotk_scan_attr
   use iotk_error_interf
   use iotk_dat_interf, only: iotk_scan_dat_aux
   use iotk_scan_interf
@@ -703,8 +801,24 @@ subroutine iotk_scan_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,found,d
   character(iotk_vallenx) :: rtype
   character(iotk_vallenx) :: fmt
   character(iotk_attlenx) :: lattr
+! ... necessary because i need the syntax to use
+  type (iotk_unit), pointer :: this
+! ... necessary to read the tag describing the type
+  character(iotk_taglenx) :: ltag
+  character(iotk_namlenx) :: r_name
+  character(iotk_attlenx) :: lattr2
+  character(len=20) :: tmpstr
+! ... necessary for scan_tag
+  logical :: binary,stream,qe_syntax
+  integer :: r_control,rrank
+  integer :: rshape,i
   integer :: columns
   logical :: inside,foundl
+  call iotk_unit_get(iotk_phys_unit(unit),pointer=this)
+  qe_syntax = .false.
+  if (associated(this)) THEN
+     qe_syntax = this%qe_syntax
+  end if
   inside = .false.
   ierrl = 0
   ierrl2 = 0
@@ -718,9 +832,79 @@ subroutine iotk_scan_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,found,d
     $(ERROR ierrl)
     goto 1
   end if
+  if (.not.qe_syntax) then
   call iotk_parse_dat(lattr,rtype,rkind,rsize,rlen,fmt,columns,ierrl)
 ! Note that columns is not effectively used
   if(ierrl/=0) goto 1
+  else
+     call iotk_inquire(iotk_phys_unit(unit),binary,stream,ierrl)
+     if(ierrl/=0) then
+        $(ERROR ierrl)
+        goto 1
+     end if
+     do
+        call iotk_scan_tag(unit,+1,r_control,ltag,binary,stream,ierrl)
+        if(ierrl/=0) then
+           $(ERROR ierrl)
+           goto 1
+        end if
+       if (r_control==4) then
+	   cycle
+	else
+	   exit
+	end if
+     end do
+
+     call iotk_tag_parse(ltag,r_name,lattr2,ierrl)
+     if(ierrl/=0) then
+        $(ERROR ierrl)
+	goto 1
+     end if
+     call iotk_strcpy(rtype,r_name,ierrl)
+     rtype = iotk_toupper(rtype)
+
+      rlen = -1
+
+     if (rtype(1:iotk_strlen(rtype))/="STRING") then
+        call iotk_scan_attr(lattr2,"rank",rrank,ierr=ierrl,default=0)
+        if(ierrl/=0) then
+           $(ERROR ierrl)
+           return
+        end if
+        rsize = 1
+        if (rrank>0) then
+           do i=1,rrank
+     	      write(tmpstr,'(i20)') i
+	      tmpstr = adjustl(tmpstr)
+	      call iotk_scan_attr(lattr2,"n"//tmpstr(1:len_trim(tmpstr)),rshape,ierr=ierrl,default=0)
+              if(ierrl/=0) then
+                 $(ERROR ierrl)
+                 return
+              end if
+	      rsize = rsize*rshape
+	   end do
+	end if
+     else
+        call iotk_strcpy(rtype,"CHARACTER",ierrl)
+        rsize = -1        
+     end if
+
+     call iotk_scan_attr(lattr2,"kind",rkind,ierr=ierrl,default=-1)
+     if(ierrl/=0) then
+        $(ERROR ierrl)
+        return
+     end if
+     call iotk_scan_attr(lattr2,"fmt", fmt, ierr=ierrl,eos=.true.,default="!"//iotk_eos)
+     if(ierrl/=0) then
+        $(ERROR ierr)
+        return
+     end if
+     call iotk_scan_attr(lattr2,"columns",columns,ierr=ierrl,default=1)
+     if(ierrl/=0) then
+       $(ERROR ierr)
+       return
+     end if
+  end if
   if(.not. (iotk_strcomp(rtype,iotk_eos) .or. iotk_strcomp(rtype,"${type}") ) ) then
     $(ERROR ierrl ' ' rtype='rtype(1:iotk_strlen(rtype))' type=$type_string)
     goto 1
@@ -733,7 +917,6 @@ subroutine iotk_scan_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,found,d
 > if [ $type = CHARACTER ] ; then
   if(rlen ==-1) rlen  = len(dat)
 > fi
-
   allocate(tmpdat($(SIZE dat)))
   call iotk_scan_dat_aux(unit,tmpdat,rkind,rlen,fmt(1:iotk_strlen(fmt)),ierrl)
   if(ierrl/=0) then
@@ -753,9 +936,20 @@ subroutine iotk_scan_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,found,d
      dat = reshape(tmpdat,shape(dat))
 #endif
 > fi
-  deallocate(tmpdat)
 1 continue
+  if ( allocated(tmpdat) ) deallocate(tmpdat)
   if(inside) then
+    if (qe_syntax) then 
+> if [ $type == CHARACTER ] ; then
+      call iotk_scan_end(unit,"string",ierr=ierrl2)
+> else
+      call iotk_scan_end(unit,iotk_tolower("${type}"),ierr=ierrl2) 
+> fi
+       if(ierrl2/=0) then
+          call iotk_error_clear(ierrl)
+          ierrl=ierrl2
+       end if
+    end if
     call iotk_scan_end(unit,name,ierr=ierrl2)
     if(ierrl2/=0) then
       call iotk_error_clear(ierrl)
@@ -778,6 +972,186 @@ subroutine iotk_scan_dat_${type}${kind}_${rank}(unit,name,dat,dummy,attr,found,d
   end if
 end subroutine iotk_scan_dat_${type}${kind}_${rank}
 
+! ... new procedure: scan dat when you are already inside the data tag
+>PROCEDURE=iotk_scan_dat_inside
+subroutine iotk_scan_dat_inside_${type}${kind}_${rank}(unit,dat,dummy,found,default,ierr)
+  use iotk_base
+  use iotk_unit_interf
+  use iotk_attr_interf, only : iotk_scan_attr
+  use iotk_error_interf
+  use iotk_dat_interf, only: iotk_scan_dat_aux
+  use iotk_scan_interf
+  use iotk_str_interf
+  use iotk_misc_interf
+  implicit none
+  integer, parameter :: this_kind = iotk_${type}${kind}
+  integer,                                   intent(in)  :: unit
+#ifdef __IOTK_WORKAROUND6
+  ${type}(kind=this_kind$LENSTAR)                        :: dat ${SHAPE[$rank]}
+#else
+  ${type}(kind=this_kind$LENSTAR),           intent(out) :: dat ${SHAPE[$rank]}
+#endif
+
+  type(iotk_dummytype),            optional              :: dummy
+  logical,                         optional, intent(out) :: found
+  ${type}(kind=this_kind$LENSTAR), optional, intent(in)  :: default ${SHAPE[$rank]}
+  integer,                         optional, intent(out) :: ierr
+> if [ $type = CHARACTER ] ; then
+  ${type} (kind=this_kind,len=len(dat)), allocatable :: tmpdat(:)
+> else
+  ${type} (kind=this_kind),              allocatable :: tmpdat(:)
+  character(len=20) :: tmpstr
+  integer :: rrank
+  integer :: rshape,i
+> fi
+  integer :: ierrl,ierrl2
+  integer :: rkind,rsize,rlen
+  character(iotk_vallenx) :: rtype
+  character(iotk_vallenx) :: fmt
+  character(iotk_attlenx) :: lattr
+  character(iotk_namlenx) :: rname
+  type (iotk_unit), pointer :: this
+  integer :: columns
+  logical :: inside,foundl,qe_syntax
+
+
+  call iotk_unit_get(iotk_phys_unit(unit),pointer=this)
+
+  qe_syntax = .true.
+  IF (associated(this)) then
+     qe_syntax = this%qe_syntax
+  END IF
+
+  inside = .false.
+  ierrl = 0
+  ierrl2 = 0
+  foundl=.false.
+
+  if (.not.qe_syntax) then
+    $(ERROR ierrl)
+    goto 1
+  end if
+
+> if [ $type = CHARACTER ] ; then
+  rname = "string"
+  call iotk_scan_begin(unit,"string",lattr,found=foundl,ierr=ierrl)
+> else
+  rname = iotk_tolower("${type}")
+  call iotk_scan_begin(unit,iotk_tolower("${type}"),lattr,found=foundl,ierr=ierrl)
+> fi
+  if(.not. foundl) goto 1
+
+
+  foundl = .true.
+  inside = .true.
+  if(ierrl/=0) then
+    $(ERROR ierrl)
+    goto 1
+  end if
+  
+  rlen = -1
+
+
+> if [ $type = CHARACTER ] ; then
+     call iotk_strcpy(rtype,"CHARACTER",ierrl)
+     rsize = -1
+> else
+     call iotk_scan_attr(lattr,"rank",rrank,ierr=ierrl,default=0)
+     if(ierrl/=0) then
+        $(ERROR ierrl)
+        return
+     end if
+     rsize = 1
+     if (rrank>0) then
+        do i=1,rrank
+	   write(tmpstr,'(i20)') i
+	   tmpstr = adjustl(tmpstr)
+           call iotk_scan_attr(lattr,"n"//tmpstr(1:len_trim(tmpstr)),rshape,ierr=ierrl,default=0)
+           if(ierrl/=0) then
+              $(ERROR ierrl)
+              return
+           end if
+           rsize = rsize*rshape
+        end do
+     end if
+> fi
+
+
+  call iotk_scan_attr(lattr,"kind",rkind,ierr=ierrl,default=-1)
+  if(ierrl/=0) then
+     $(ERROR ierrl)
+     return
+  end if
+  call iotk_scan_attr(lattr,"fmt", fmt, ierr=ierrl,eos=.true.,default="!"//iotk_eos)
+  if(ierrl/=0) then
+     $(ERROR ierr)
+     return
+  end if
+  call iotk_scan_attr(lattr,"columns",columns,ierr=ierrl,default=1)
+  if(ierrl/=0) then
+    $(ERROR ierr)
+    return
+  end if
+
+  if(.not. (rsize==-1 .or. rsize==$(SIZE dat)) ) then
+    $(ERROR ierrl)
+    goto 1
+  end if
+  if(rkind==-1) rkind = kind(dat)
+> if [ $type = CHARACTER ] ; then
+  if(rlen ==-1) rlen  = len(dat)
+> fi
+
+  allocate(tmpdat($(SIZE dat)))
+  call iotk_scan_dat_aux(unit,tmpdat,rkind,rlen,fmt(1:iotk_strlen(fmt)),ierrl)
+  if(ierrl/=0) then
+    $(ERROR ierrl 'Error reading data' rname rkind rlen)
+    goto 1
+  end if
+
+> if [ $rank -eq 0 ] ; then
+     dat = tmpdat(1)
+> else
+#if defined(__IOTK_WORKAROUND3) || defined(__IOTK_WORKAROUND4)
+> if [ $type == CHARACTER ] ; then
+     call iotk_private_pack_$type$kind(dat,tmpdat,size(tmpdat),len(tmpdat))
+> else
+     call iotk_private_pack_$type$kind(dat,tmpdat,size(tmpdat),1)
+> fi
+#else
+     dat = reshape(tmpdat,shape(dat))
+#endif
+> fi
+  deallocate(tmpdat)
+1 continue
+  if(inside) then
+> if [ $type == CHARACTER ] ; then
+     call iotk_scan_end(unit,"string",ierr=ierrl2)
+> else
+     call iotk_scan_end(unit,iotk_tolower("${type}"),ierr=ierrl2) 
+> fi
+     if(ierrl2/=0) then
+        call iotk_error_clear(ierrl)
+        ierrl=ierrl2
+     end if
+  end if
+
+  if(ierrl/=0) foundl=.false.
+  if(present(found)) found = foundl
+  if(ierrl==0 .and. .not. present(found) .and. .not. present(default) .and. .not. foundl) then
+    $(ERROR ierrl 'Dat not found' rname)
+    ierrl = - ierrl
+  end if 
+  if(present(default) .and. .not. foundl) then
+    dat=default
+  end if
+  if(present(ierr)) then
+    ierr = ierrl
+  else
+    if(ierrl>0 .or. (.not.present(found) .and. .not.present(default))) call iotk_error_handler(ierrl)
+  end if
+
+end subroutine iotk_scan_dat_inside_${type}${kind}_${rank}
 
 #endif
 #endif

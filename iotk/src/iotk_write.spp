@@ -32,7 +32,7 @@
 > REVISION="${REVISION//${dol}/}"
 
 >PROCEDURE="iotk_write_begin"
-subroutine iotk_write_begin_x(unit,name,attr,dummy,ierr)
+subroutine iotk_write_begin_x(unit,name,attr,dummy,new_line,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_misc_interf
@@ -44,6 +44,7 @@ subroutine iotk_write_begin_x(unit,name,attr,dummy,ierr)
   character(*),           intent(in)  :: name
   character(*), optional, intent(in)  :: attr
   type(iotk_dummytype), optional      :: dummy
+  logical, optional,intent(in)        :: new_line
   integer,      optional, intent(out) :: ierr
   character(iotk_taglenx) :: tag
   character(iotk_attlenx) :: attrl
@@ -88,7 +89,15 @@ subroutine iotk_write_begin_x(unit,name,attr,dummy,ierr)
     goto 1
   end if
   if(associated(this_unit)) indent = iotk_indent*(this_unit%level+1)
-  call iotk_write_tag(lunit,1,tag,binary,indent,ierrl)
+  if ( present(new_line) ) then
+    if (new_line) then
+      call iotk_write_tag(lunit,1,tag,binary,indent,ierrl)
+    else
+      call iotk_write_tag(lunit,1,tag,binary,indent,ierrl,new_line=.false.)
+    end if
+  else
+    call iotk_write_tag(lunit,1,tag,binary,indent,ierrl)
+  end if
   if(ierrl/=0) then
     $(ERROR ierrl 'Error writing tag' name)
     goto 1
@@ -105,7 +114,7 @@ subroutine iotk_write_begin_x(unit,name,attr,dummy,ierr)
 end subroutine iotk_write_begin_x
     
 >PROCEDURE="iotk_write_end"
-subroutine iotk_write_end_x(unit,name,dummy,ierr)
+subroutine iotk_write_end_x(unit,name,dummy,indentation,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_files_interf
@@ -117,6 +126,7 @@ subroutine iotk_write_end_x(unit,name,dummy,ierr)
   integer,                intent(in)  :: unit
   character(*),           intent(in)  :: name
   type(iotk_dummytype), optional      :: dummy
+  logical, optional,      intent(in)  :: indentation
   integer,      optional, intent(out) :: ierr
   character(iotk_taglenx) :: tag
   logical :: binary,stream
@@ -145,6 +155,9 @@ subroutine iotk_write_end_x(unit,name,dummy,ierr)
     goto 1
   end if
   if(associated(this_unit)) indent = iotk_indent * this_unit%level
+  if (present(indentation)) then
+    if ( .not.indentation ) indent = 0
+  end if
   call iotk_write_tag(lunit,2,tag,binary,indent,ierrl)
   if(ierrl/=0) then
     $(ERROR ierrl)
@@ -359,7 +372,7 @@ subroutine iotk_write_empty_x(unit,name,attr,dummy,ierr)
 end subroutine iotk_write_empty_x
 
 >PROCEDURE=iotk_write_tag
-subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr)
+subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr,new_line)
   use iotk_base
   use iotk_error_interf
   use iotk_misc_interf
@@ -371,6 +384,7 @@ subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr)
   logical,                   intent(in)  :: binary
   integer,                   intent(in)  :: indent
   integer,                   intent(out) :: ierr
+  logical, optional, intent(in)          :: new_line
   integer(iotk_header_kind) :: header,header2
   integer :: taglen,taglenp
   integer :: iostat,pos1,pos2
@@ -438,7 +452,15 @@ subroutine iotk_write_tag_x(unit,control,tag,binary,indent,ierr)
       if(mannl>0)     cycle
       write(unit,*,iostat=iostat)
     end do
-    write(unit,"(a)",iostat=iostat) trim(end)
+    if (present(new_line)) then
+      if (new_line) then
+        write(unit,"(a)",iostat=iostat) trim(end)
+      else
+        write(unit,"(a)",iostat=iostat,advance="no") trim(end)
+      end if
+    else
+      write(unit,"(a)",iostat=iostat) trim(end)
+    end if
   end if
   if(iostat/=0) then
     $(ERROR ierr 'error writing' iostat)

@@ -41,7 +41,7 @@ public :: iotk_scan
 public :: iotk_getline
 
 interface iotk_scan_begin
-subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
+subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,direction,ierr)
   use iotk_base
   implicit none
   integer,                        intent(in)  :: unit
@@ -53,6 +53,7 @@ subroutine iotk_scan_begin_x(unit,name,attr,dummy,found,ierr)
 #endif
   type(iotk_dummytype), optional              :: dummy
   logical,              optional, intent(out) :: found
+  integer,              optional, intent(out) :: direction
   integer,              optional, intent(out) :: ierr
 end subroutine iotk_scan_begin_x
 end interface

@@ -97,7 +97,7 @@ end subroutine iotk_private_pack_$type$kind
 
 > if [ $type != CHARACTER ] ; then
 >PROCEDURE=iotk_write
-subroutine iotk_write_${type}${kind}(val,string,ierr)
+subroutine iotk_write_${type}${kind}(val,string,fmt,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_xtox_interf
@@ -111,6 +111,7 @@ subroutine iotk_write_${type}${kind}(val,string,ierr)
 #else
   character(len=*), intent(out) :: string
 #endif
+  character(len=*), intent(in)  :: fmt
   integer, intent(out) :: ierr
 > if [ $type = REAL -o $type = COMPLEX ] ; then
   character(len=100) :: tmpval
@@ -138,7 +139,11 @@ subroutine iotk_write_${type}${kind}(val,string,ierr)
       return
     end if
 > else
-    write(tmpval,trim(iotk_wfmt("${type}",kind(val),1,-1," ")),iostat=iostat) val(index)
+    if (trim(fmt)=="!") then
+       write(tmpval,trim(iotk_wfmt("${type}",kind(val),1,-1," ")),iostat=iostat) val(index)
+    else
+       write(tmpval,fmt=fmt,iostat=iostat) val(index)
+    end if
     if(iostat/=0) then
       $(ERROR ierr ' ' iostat)
       return
@@ -246,7 +251,7 @@ end subroutine iotk_read_${type}${kind}
 
 > if [ $type != CHARACTER -o $rank -eq 0 ] ; then
 >PROCEDURE=iotk_write_attr
-subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newline,ierr)
+subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newline,fmt,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_attr_interf
@@ -259,12 +264,14 @@ subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newl
   type(iotk_dummytype), optional :: dummy
   logical, optional, intent(in)  :: first
   logical, optional, intent(in)  :: newline
+  character(*), optional, intent(in) :: fmt
   integer, optional, intent(out) :: ierr
   integer :: ierrl
   integer :: attlen
   integer :: vallen
   integer :: namlen
   character :: delim
+  character(len=300) :: usefmt
 > if [ $type = CHARACTER ] ; then
   logical :: lquot,lapos
 > fi
@@ -275,6 +282,11 @@ subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newl
   else
     nl = .false.
   endif
+  if (present(fmt)) then
+    usefmt = fmt
+  else
+    usefmt = "!"
+  end if
   ierrl = 0
   if(present(first)) then
     if(first) attr(1:1) = iotk_eos
@@ -301,9 +313,9 @@ subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newl
 > else
   delim = '"'
 > if [ $rank -eq 0 ] ; then
-  call iotk_write((/val/),tmpval,ierrl)
+  call iotk_write((/val/),tmpval,usefmt,ierrl)
 > else
-  call iotk_write(pack(val,mask=.true.),tmpval,ierrl)
+  call iotk_write(pack(val,mask=.true.),tmpval,usefmt,ierrl)
 > fi
   if(ierrl/=0) then
     $(ERROR ierrl)

@@ -62,7 +62,7 @@ interface iotk_write
 >  [[ $type == CHARACTER ]] && continue
 >  for kind in $kinds ; do
 #ifdef __IOTK_${type}${kind}
-subroutine iotk_write_${type}${kind}(val,string,ierr)
+subroutine iotk_write_${type}${kind}(val,string,fmt,ierr)
   use iotk_base
   implicit none
   integer, parameter :: this_kind = iotk_${type}${kind}
@@ -72,6 +72,7 @@ subroutine iotk_write_${type}${kind}(val,string,ierr)
 #else
   character(len=*),        intent(out) :: string
 #endif
+  character(len=*), intent(in)         :: fmt
   integer,                 intent(out) :: ierr
 end subroutine iotk_write_${type}${kind}
 #endif
@@ -88,7 +89,7 @@ interface iotk_write_attr
 >    for rank in $ranks ; do
 >    [[ $type == CHARACTER ]] && (( rank != 0 )) && continue
 #if $rank <= __IOTK_MAXRANK
-subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newline,ierr)
+subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newline,fmt,ierr)
   use iotk_base
   implicit none
   integer, parameter :: this_kind = iotk_${type}${kind}
@@ -98,6 +99,7 @@ subroutine iotk_write_attr_${type}${kind}_${rank}(attr,name,val,dummy,first,newl
   type(iotk_dummytype),            optional              :: dummy
   logical,                         optional, intent(in)  :: first
   logical,                         optional, intent(in)  :: newline
+  character(len=*), optional, intent(in)                 :: fmt
   integer,                         optional, intent(out) :: ierr
 end subroutine iotk_write_attr_${type}${kind}_${rank}
 #endif

@@ -31,6 +31,7 @@
 > REVISION='$Revision: 1.39 $'
 > REVISION="${REVISION//${dol}/}"
 
+! ... doesn't work with qe_syntax
 >PROCEDURE=iotk_copy_tag
 subroutine iotk_copy_tag_x(source,dest,dummy,maxsize,ierr)
   use iotk_base
@@ -342,7 +343,7 @@ subroutine iotk_print_kinds_x
   write(*,"(a)") trim(string)
 end subroutine iotk_print_kinds_x
 
-
+! ... doesn't work with qe_syntax
 >PROCEDURE=iotk_copy_dat_aux
 subroutine iotk_copy_dat_aux_x(source,dest,source_binary,dest_binary,name,type,ikind,isize, &
                                ilen,fmt,columns,attr,ierr)

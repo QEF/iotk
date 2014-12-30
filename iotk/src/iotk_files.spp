@@ -212,7 +212,8 @@ subroutine iotk_link_x(unit,name,file,dummy,binary,raw,create,ierr)
       goto 1
     end if
     call iotk_open_write(link_unit,file=iotk_complete_filepath(file,trim(oldfile)), &
-                                 binary=lbinary,raw=lraw,skip_root=.true.,ierr=ierrl)
+! ... inside link we use the same syntax (qe or not)
+                                 binary=lbinary,raw=lraw,qe_syntax=this_unit%qe_syntax,skip_root=.true.,ierr=ierrl)
     if(ierrl/=0) then
       $(ERROR ierrl)
       goto 1
@@ -232,7 +233,7 @@ subroutine iotk_link_x(unit,name,file,dummy,binary,raw,create,ierr)
 end subroutine iotk_link_x
 
 >PROCEDURE="iotk_open_write"
-subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,skip_head,ierr)
+subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,qe_syntax,skip_root,skip_head,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_attr_interf
@@ -249,6 +250,7 @@ subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,
   logical,      optional, intent(in)  :: new
   logical,      optional, intent(in)  :: raw
   character(*), optional, intent(in)  :: root
+  logical,      optional, intent(in)  :: qe_syntax
   logical,      optional, intent(in)  :: skip_root
   logical,      optional, intent(in)  :: skip_head
   integer,      optional, intent(out) :: ierr
@@ -259,12 +261,14 @@ subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,
   character(iotk_attlenx) :: lattr
   integer :: ierrl
   logical :: lbinary,lraw,lnew,lskip_root,lskip_head,lstream
+  logical :: lqe_syntax
   type (iotk_unit), pointer :: this
   ierrl = 0
   iostat = 0
   lroot = "Root"
   lraw = .false.
   lnew = .false.
+  lqe_syntax = .false.
   lbinary = .false.
   lskip_root = .false.
   lskip_head = .false.
@@ -272,6 +276,7 @@ subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,
   if(present(raw)) lraw=raw
   if(present(binary)) lbinary = binary
   if(present(new)) lnew = new
+  if(present(qe_syntax)) lqe_syntax = qe_syntax
   if(present(skip_root)) lskip_root = skip_root
   if(lskip_root) lroot=""
   if(present(skip_head)) lskip_head = skip_head
@@ -331,6 +336,16 @@ subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,
         $(ERROR ierrl 'Error writing binary tag')
         goto 1
       end if
+      call iotk_write_attr(lattr,"qe_syntax",lqe_syntax,first=.true.,ierr=ierrl)
+      if(ierrl/=0) then
+        $(ERROR ierrl 'Error writing qe_syntax attribute')
+        goto 1
+      end if
+      call iotk_write_pi(unit,"iotk",lattr,ierr=ierrl)
+      if(ierrl/=0) then
+        $(ERROR ierrl 'Error writing qe_syntax tag')
+        goto 1
+      end if
     end if
     if(.not.lskip_root) then
       lattr(1:1) = iotk_eos
@@ -355,6 +370,7 @@ subroutine iotk_open_write_x(unit,file,dummy,attr,binary,new,raw,root,skip_root,
   end if
   this%root=lroot
   this%raw=lraw
+  this%qe_syntax = lqe_syntax
   this%close_at_end=present(file)
   this%skip_root=lskip_root
   if(lskip_root) this%level = -1
@@ -432,7 +448,7 @@ end subroutine iotk_close_write_x
 
 
 >PROCEDURE="iotk_open_read"
-subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
+subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,qe_syntax,root,ierr)
   use iotk_base
   use iotk_error_interf
   use iotk_str_interf
@@ -446,6 +462,7 @@ subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
   character(*), optional, intent(in)  :: file
   type(iotk_dummytype), optional      :: dummy
   logical,      optional, intent(in)  :: binary
+  logical,      optional, intent(in)  :: qe_syntax
   logical,      optional, intent(in)  :: stream
   logical,      optional, intent(in)  :: raw
 #ifdef __IOTK_WORKAROUND6
@@ -463,9 +480,11 @@ subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
   type(iotk_unit),pointer :: this
   integer                 :: ierrl,control,iostat
   logical                 :: lbinary,lraw,lstream
+  logical                 :: lqe_syntax,found
   ierrl = 0
   iostat = 0
   lbinary=.false.
+  lqe_syntax=.false.
   lstream=.false.
   lraw=.false.
   lroot = " "
@@ -524,10 +543,16 @@ subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
             $(ERROR ierrl)
             goto 1
           end if
+	  call iotk_scan_attr(lattr,"qe_syntax",lqe_syntax,default=.false.,ierr=ierrl,found=found)
+          if(ierrl/=0) then
+            $(ERROR ierrl)
+            goto 1
+          end if
         end if
       end select
     end do
   end if
+  if(present(qe_syntax)) lqe_syntax = qe_syntax
   if(present(root)) root = lroot
   if(present(attr)) call iotk_strcpy(attr,lattr,ierrl)
   if(ierrl/=0) then
@@ -543,6 +568,7 @@ subroutine iotk_open_read_x(unit,file,dummy,attr,binary,stream,raw,root,ierr)
   this%raw=lraw
   this%close_at_end=present(file)
   this%skip_root=.false.
+  this%qe_syntax = lqe_syntax
 1 continue
   if(present(ierr)) then
     ierr = ierrl

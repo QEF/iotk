@@ -152,6 +152,7 @@ type iotk_unit
   character(iotk_namlenx)     :: root  ! name of the root tag
   logical                     :: skip_root ! if true, root tag is not written automatically
   logical                     :: raw   ! if true, the file is raw data
+  logical                     :: qe_syntax ! if true, the file is read/written using the new syntax
   integer                     :: level ! the hierarchical level inside the file
   logical                     :: close_at_end ! if true, the file has to be fortran-closed when iotk_close_* is called
   type (iotk_unit),   pointer :: son    ! a pointer to the son in the multi-file model
